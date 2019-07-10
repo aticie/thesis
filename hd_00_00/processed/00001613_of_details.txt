@@ -1,0 +1,11 @@
+Input:00001613.jpg
+Input full path:D:/CMU\Pizza\hd_00_00\00001613.jpg
+Camera parameters:1312.5,1312.5,960,540
+Output image:00001613.jpg
+Output csv:00001613.csv
+Gaze: 0
+AUs: 0
+Landmarks 2D: 0
+Landmarks 3D: 0
+Pose: 1
+Shape parameters: 0
