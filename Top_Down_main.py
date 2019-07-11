@@ -4,6 +4,7 @@ import numpy as np
 import cv2
 import json
 from scipy.spatial.transform import Rotation as R
+import panutils
 
 
 def GetNormal(v1, v2, v3):
@@ -77,69 +78,89 @@ def draw_cameras(camera_positions, img, sel_cams):
     return None
 
 
-def draw_ground_truth(img, init_cam_x, init_cam_z, cam_pos_x, cam_pos_z):
+def draw_ground_truth(img, init_cam_x, init_cam_z, cam_pos_x, cam_pos_z, calib):
     try:
         gt_pose_file = os.path.join(cwd, "hdFace3d/faceRecon3D_hd" + frameNo + ".json")
         with open(gt_pose_file) as dfile:
             fframe = json.load(dfile)
+    except IOError as e:
+        print('Error reading {0}\n'.format(gt_pose_file) + e.strerror)
+    i = 0
+    cameras = {(cam['panel'], cam['node']): cam for cam in calib['cameras']}
+    cam = cameras[0, 0]
+    for face in fframe['people']:
+        face3d = np.array(face['face70']['landmarks']).reshape((-1, 3)).transpose()
+        face2d = panutils.projectPoints(face3d, cam['K'], cam['R'], cam['t'], cam['distCoef'])
+        face2d = face2d[0:2, :]
+        _, rvec, tvec = cv2.solvePnP(face3d.T, face2d.T, cameraMatrix=cam['K'], distCoeffs=cam['distCoef'])
+        color = cv2.cvtColor(np.uint8([[[(130 // len(fframe['people']) * i) + 10, 255, 255]]]), cv2.COLOR_HSV2BGR)
+        color = (int(color[0, 0, 0]), int(color[0, 0, 1]), int(color[0, 0, 2]))
 
-        i = 0
-        for face in fframe['people']:
-            face3d = np.array(face['face70']['landmarks']).reshape((-1, 3)).transpose()
-            color = cv2.cvtColor(np.uint8([[[(130 // len(fframe['people']) * i) + 10, 255, 255]]]), cv2.COLOR_HSV2BGR)
-            color = (int(color[0, 0, 0]), int(color[0, 0, 1]), int(color[0, 0, 2]))
-            i += 1
-            points = []
-            for point in face_points[0]:
-                point_x = face3d[0, point]
-                point_y = face3d[1, point]
-                point_z = face3d[2, point]
+        [a, b, c] = face3d
+        [start_x, _, start_z] = [np.average(a), np.average(b), np.average(c)]
+        start_x = int((start_x - init_cam_x) * scale_multiplier)
+        start_z = int((start_z - init_cam_z) * scale_multiplier)
+        start_x += cam_pos_x
+        start_z += cam_pos_z
+        top_left = (int(start_x - 6), int(start_z - 6))
+        bottom_right = (int(start_x + 6), int(start_z + 6))
+        cv2.rectangle(img, top_left, bottom_right, color, -1)
+        arrow_vec = np.array([0, 0, 1])*30
+        r = R.from_rotvec(rvec.T)
+        arrow_vec = r.apply(arrow_vec)
 
-                cam_rel_x = (face3d[0, point] - init_cam_x) * scale_multiplier
-                cam_rel_z = (face3d[2, point] - init_cam_z) * scale_multiplier
+        [end_x, _, end_z] = [start_x, 0, start_z] + arrow_vec[0]
+        cv2.arrowedLine(img, (int(start_x), int(start_z)), (int(end_x), int(end_z)), color)
+        i += 1
+        points = []
+        '''
+        for point in face_points[0]:
+            point_x = face3d[0, point]
+            point_y = face3d[1, point]
+            point_z = face3d[2, point]
 
-                cam_rel_x += cam_pos_x
-                cam_rel_z += cam_pos_z
+            cam_rel_x = (face3d[0, point] - init_cam_x) * scale_multiplier
+            cam_rel_z = (face3d[2, point] - init_cam_z) * scale_multiplier
 
-                cv2.circle(img, (int(cam_rel_x), int(cam_rel_z)), 2, color, -1)
-                points.append([point_x, point_y, point_z])
+            cam_rel_x += cam_pos_x
+            cam_rel_z += cam_pos_z
 
-            points = np.array(points)
-            c, normal = fitPlaneLTSQ(points)
-            [a, b, c] = face3d[:, face_points[0]]
-            [start_x, _, start_z] = [np.average(a), np.average(b), np.average(c)]
-            n = normal / np.linalg.norm(normal) * 30
+            cv2.circle(img, (int(cam_rel_x), int(cam_rel_z)), 2, color, -1)
+            points.append([point_x, point_y, point_z])
+
+        points = np.array(points)
+        c, normal = fitPlaneLTSQ(points)
+        [a, b, c] = face3d[:, face_points[0]]
+        [start_x, _, start_z] = [np.average(a), np.average(b), np.average(c)]
+        n = normal / np.linalg.norm(normal) * 30
+        start_x = int((start_x - init_cam_x) * scale_multiplier)
+        start_z = int((start_z - init_cam_z) * scale_multiplier)
+        start_x += cam_pos_x
+        start_z += cam_pos_z
+        x = int((n[0] - init_cam_x) * scale_multiplier)
+        z = int((n[2] - init_cam_z) * scale_multiplier)
+        x += cam_pos_x
+        z += cam_pos_z
+        cv2.arrowedLine(img, (start_x, start_z), (x, z), (127, 255, 0))
+        
+        for tri in face_tri:
+            [a, b, c] = face3d[:, tri].T
+            n = GetNormal(a, b, c)
+            n = n / np.linalg.norm(n) * 30
+
+            [start_x, _, start_z] = GetAvg(a, b, c)
             start_x = int((start_x - init_cam_x) * scale_multiplier)
             start_z = int((start_z - init_cam_z) * scale_multiplier)
             start_x += cam_pos_x
             start_z += cam_pos_z
+
             x = int((n[0] - init_cam_x) * scale_multiplier)
             z = int((n[2] - init_cam_z) * scale_multiplier)
             x += cam_pos_x
             z += cam_pos_z
-            cv2.arrowedLine(img, (start_x, start_z), (x, z), (127, 255, 0))
-            '''
-            for tri in face_tri:
-                [a, b, c] = face3d[:, tri].T
-                n = GetNormal(a, b, c)
-                n = n / np.linalg.norm(n) * 30
 
-                [start_x, _, start_z] = GetAvg(a, b, c)
-                start_x = int((start_x - init_cam_x) * scale_multiplier)
-                start_z = int((start_z - init_cam_z) * scale_multiplier)
-                start_x += cam_pos_x
-                start_z += cam_pos_z
-
-                x = int((n[0] - init_cam_x) * scale_multiplier)
-                z = int((n[2] - init_cam_z) * scale_multiplier)
-                x += cam_pos_x
-                z += cam_pos_z
-
-                cv2.line(img, (start_x, start_z), (x, z), (127, 127, 127))
-            '''
-    except IOError as e:
-        print('Error reading {0}\n'.format(gt_pose_file) + e.strerror)
-
+            cv2.line(img, (start_x, start_z), (x, z), (127, 127, 127))
+        '''
     return None
 
 
@@ -187,7 +208,7 @@ draw_cameras(camera_positions, img, sel_cams)
 
 saveFile = os.path.join(cwd, "TopDown/Frame_" + frameNo + ".jpg")
 
-draw_ground_truth(img, init_cam_x, init_cam_z, cam_pos_x, cam_pos_z)
+draw_ground_truth(img, init_cam_x, init_cam_z, cam_pos_x, cam_pos_z, calib)
 
 OpenFace_File = "hd_00_00/processed/" + frameNo + ".csv"
 df = pandas.read_csv(OpenFace_File)
@@ -195,10 +216,10 @@ df = pandas.read_csv(OpenFace_File)
 poses = df.values.tolist()
 
 cv2.arrowedLine(img, (20, 20), (50, 20), (255, 0, 0), 2)
-cv2.putText(img, "Z", (55, 25), font, 0.5, (255, 255, 255), 2)
+cv2.putText(img, "X", (55, 25), font, 0.5, (255, 255, 255), 2)
 
 cv2.arrowedLine(img, (20, 20), (20, 50), (0, 255, 0), 2)
-cv2.putText(img, "X", (15, 65), font, 0.5, (255, 255, 255), 2)
+cv2.putText(img, "Z", (15, 65), font, 0.5, (255, 255, 255), 2)
 
 people_pose = np.zeros((len(poses), 2))
 people_rot = np.zeros((len(poses), 3))
