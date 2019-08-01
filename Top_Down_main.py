@@ -65,6 +65,9 @@ def scale_translate_cameras(calib, cam_pos_x, cam_pos_z):
 
 
 def draw_cameras(camera_positions, img, sel_cams):
+
+    cam_positions = {}
+
     for i in range(len(camera_positions[1])):
         cam_pos_x = int(camera_positions[0][i])
         cam_pos_z = int(camera_positions[2][i])
@@ -75,7 +78,9 @@ def draw_cameras(camera_positions, img, sel_cams):
         cv2.putText(img, 'Cam_' + str(camNo), (cam_pos_x - 45, cam_pos_z + 35), font, 0.75, (255, 255, 255), 2,
                     cv2.LINE_AA)
 
-    return None
+        cam_positions[camNo] = [cam_pos_x, cam_pos_z]
+
+    return cam_positions
 
 
 def draw_ground_truth(img, init_cam_x, init_cam_z, cam_pos_x, cam_pos_z, calib):
@@ -180,17 +185,26 @@ def fitPlaneLTSQ(XYZ):
 cwd = os.getcwd()
 
 sel_cams = [0, 8, 15, 23]
-camNo = '{0:02d}'.format(sel_cams[0])
-
 frames = ["00001147", "00001613", "00002319", "00003476", "00003961", "00004905", "00005777", "00006078", "00006328",
           "00006577"]
 frameNo = frames[5]
+
+face_edges = np.array([[0,1],[1,2],[2,3],[3,4],[4,5],[5,6],[6,7],[7,8],[8,9],[9,10],[11,12],[12,13],[14,15],[15,16], #outline (ignored)
+                [17,18],[18,19],[19,20],[20,21], #right eyebrow
+                [22,23],[23,24],[24,25],[25,26], #left eyebrow
+                [27,28],[28,29],[29,30],   #nose upper part
+                [31,32],[32,33],[33,34],[34,35], #nose lower part
+                [36,37],[37,38],[38,39],[39,40],[40,41],[41,36], #right eye
+                [42,43],[43,44],[44,45],[45,46],[46,47],[47,42], #left eye
+                [48,49],[49,50],[50,51],[51,52],[52,53],[53,54],[54,55],[55,56],[56,57],[57,58],[58,59],[59,48], #Lip outline
+                [60,61],[61,62],[62,63],[63,64],[64,65],[65,66],[66,67],[67,60] #Lip inner line 
+                ])
 
 face_edges = np.array([[36, 37], [37, 38], [38, 39], [39, 40], [40, 41], [41, 36],
                        [42, 43], [43, 44], [44, 45], [45, 46], [46, 47], [47, 42]])
 face_tri = np.array(
     [[36, 37, 38], [37, 38, 39], [38, 39, 40], [39, 40, 41], [42, 43, 44], [43, 44, 45], [44, 45, 46], [45, 46, 47]])
-face_points = np.array([[36, 37, 38, 39, 40, 41], [42, 43, 44, 45, 46, 47]])
+face_points = np.array([range(36,42), range(42,48)])
 
 cam_pos_x = 200
 cam_pos_z = 400
@@ -204,16 +218,12 @@ font = cv2.FONT_HERSHEY_SIMPLEX
 
 camera_positions, (init_cam_x, init_cam_z) = scale_translate_cameras(calib, cam_pos_x, cam_pos_z)
 
-draw_cameras(camera_positions, img, sel_cams)
+
+camNo = '{0:02d}'.format(sel_cams[0])
+
+cam_positions = draw_cameras(camera_positions, img, sel_cams)
 
 saveFile = os.path.join(cwd, "TopDown/Frame_" + frameNo + ".jpg")
-
-draw_ground_truth(img, init_cam_x, init_cam_z, cam_pos_x, cam_pos_z, calib)
-
-OpenFace_File = "hd_00_00/processed/" + frameNo + ".csv"
-df = pandas.read_csv(OpenFace_File)
-
-poses = df.values.tolist()
 
 cv2.arrowedLine(img, (20, 20), (50, 20), (255, 0, 0), 2)
 cv2.putText(img, "X", (55, 25), font, 0.5, (255, 255, 255), 2)
@@ -221,65 +231,75 @@ cv2.putText(img, "X", (55, 25), font, 0.5, (255, 255, 255), 2)
 cv2.arrowedLine(img, (20, 20), (20, 50), (0, 255, 0), 2)
 cv2.putText(img, "Z", (15, 65), font, 0.5, (255, 255, 255), 2)
 
-people_pose = np.zeros((len(poses), 2))
-people_rot = np.zeros((len(poses), 3))
-people_conf = np.zeros(len(poses))
+#draw_ground_truth(img, init_cam_x, init_cam_z, cam_pos_x, cam_pos_z, calib)
 
-max_z = 0
+#cv2.line(img, (940, 20), (940, 470), (255, 255, 255), 2)
+#cv2.line(img, (930, 470), (950, 470), (255, 255, 255), 2)
+#cv2.line(img, (930, 20), (950, 20), (255, 255, 255), 2)
+#cv2.putText(img, str(max_z) + "mm", (850, 225), font, 0.5, (255, 255, 255), 2)
 
-# ---- Create predicted persons ----
+for camNo in sel_cams:
+    [cam_x, cam_z] = cam_positions[camNo]
+    camNo = '{0:02d}'.format(camNo)
 
-#
-for i, person in enumerate(poses):
-    people_pose[i, 0] = person[2]
-    people_pose[i, 1] = person[4]
-    people_conf[i] = person[1]
-    if people_pose[i, 1] > max_z:
-        max_z = people_pose[i, 1]
-    people_rot[i, 0] = person[5]
-    people_rot[i, 1] = person[6]
-    people_rot[i, 2] = person[7]
+    OpenFace_File = "hd_00_"+camNo+"/processed/" + frameNo + ".csv"
+    df = pandas.read_csv(OpenFace_File)
 
-people_pose = np.divide(people_pose, max_z)
-people_pose = np.multiply(people_pose, 450)
+    poses = df.values.tolist()
 
-cv2.line(img, (940, 20), (940, 470), (255, 255, 255), 2)
-cv2.line(img, (930, 470), (950, 470), (255, 255, 255), 2)
-cv2.line(img, (930, 20), (950, 20), (255, 255, 255), 2)
-cv2.putText(img, str(max_z) + "mm", (850, 225), font, 0.5, (255, 255, 255), 2)
+    people_pose = np.zeros((len(poses), 2))
+    people_rot = np.zeros((len(poses), 3))
+    people_conf = np.zeros(len(poses))
 
-for i in range(len(poses)):
+    max_z = 0
 
-    x = int(people_pose[i, 0])
-    z = int(people_pose[i, 1])
-    rot_x = people_rot[i, 0]
-    rot_y = people_rot[i, 1]
-    rot_z = people_rot[i, 2]
+    # ---- Draw predicted people ----
 
-    x = (+x + cam_pos_z)
-    z = (cam_pos_x + z)
+    for i, person in enumerate(poses):
+        people_pose[i, 0] = person[2]
+        people_pose[i, 1] = person[4]
+        people_conf[i] = person[1]
+        if people_pose[i, 1] > max_z:
+            max_z = people_pose[i, 1]
+        people_rot[i, 0] = person[5]
+        people_rot[i, 1] = person[6]
+        people_rot[i, 2] = person[7]
 
-    color = cv2.cvtColor(np.uint8([[[(130 // len(poses) * i) + 10, 255, 255]]]), cv2.COLOR_HSV2BGR)
-    color = (int(color[0, 0, 0]), int(color[0, 0, 1]), int(color[0, 0, 2]))
-    if people_conf[i] < 0.5:
-        color = (127, 127, 127)
-    cv2.circle(img, (z, x), 5, color, -1)
-    cv2.putText(img, "P" + str(i), (z - 10, x + 20), font, 0.5, color, 2)
+    people_pose = np.divide(people_pose, max_z)
+    people_pose = np.multiply(people_pose, 450)
 
-    r = R.from_rotvec((0, rot_y, 0))
-    P1 = np.array((+1, 0, 0))
+    for i in range(len(poses)):
 
-    P2 = r.apply(P1)
+        x = int(people_pose[i, 0])
+        z = int(people_pose[i, 1])
+        rot_x = people_rot[i, 0]
+        rot_y = people_rot[i, 1]
+        rot_z = people_rot[i, 2]
 
-    print(P2)
+        x = (+x + cam_pos_z)
+        z = (cam_pos_x + z)
 
-    P2 = np.multiply(P2, 50)
-    P2 = P2.astype(int)
-    start_point = (z, x)
-    end_point = (z - P2[0], x + P2[2])
-    cv2.arrowedLine(img, start_point, end_point, color, 2)
+        color = cv2.cvtColor(np.uint8([[[(130 // len(poses) * i) + 10, 255, 255]]]), cv2.COLOR_HSV2BGR)
+        color = (int(color[0, 0, 0]), int(color[0, 0, 1]), int(color[0, 0, 2]))
+        if people_conf[i] < 0.5:
+            color = (127, 127, 127)
+        cv2.circle(img, (z, x), 5, color, -1)
+        cv2.putText(img, "P" + str(i), (z - 10, x + 20), font, 0.5, color, 2)
 
-cv2.imwrite(saveFile, img)
-cv2.imshow("Frame", img)
-cv2.waitKey(0)
-cv2.destroyAllWindows()
+        r = R.from_rotvec((0, rot_y, 0))
+        P1 = np.array((+1, 0, 0))
+
+        P2 = r.apply(P1)
+
+        print(P2)
+
+        P2 = np.multiply(P2, 50)
+        P2 = P2.astype(int)
+        start_point = (z, x)
+        end_point = (z - P2[0], x + P2[2])
+        cv2.arrowedLine(img, start_point, end_point, color, 2)
+
+    cv2.imwrite(saveFile, img)
+    cv2.imshow("Frame", img)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
