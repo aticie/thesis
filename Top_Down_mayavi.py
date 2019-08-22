@@ -9,10 +9,10 @@ import cv2
 import pandas as pd
 from scipy.spatial.transform import Rotation as R
 
-def draw_prediction(camNo, frameNo, myFig, clr):
+def draw_prediction(camNo, frameNo, myFig, clr, scale, method):
 
     # Find openface prediction .csv file
-    OpenFace_File = "hd_00_"+f"{camNo:02d}"+"/processed/" + frameNo + ".csv"
+    OpenFace_File = "data/"+"hd_00_"+f"{camNo:02d}"+"/"+scale+"/"+method+"/processed/" + frameNo + ".csv"
     df = pd.read_csv(OpenFace_File)
     poses = df.values.tolist()
 
@@ -22,19 +22,29 @@ def draw_prediction(camNo, frameNo, myFig, clr):
     for face in poses:
         conf = face[1]
         pose = face[2:5]
-        rot = face[5:] 
-
+        rot = face[5:8] 
+        points_x = np.multiply(face[8:76],.1)
+        points_y = np.multiply(face[76:144],.1)
+        points_z = np.multiply(face[144:212],.1)
+        print(points_x)
+        print(points_y)
+        points = np.concatenate( ([points_x], [points_y], [points_z]), axis=0)
+        points = np.matrix(points)
         pose = np.matrix(pose).T*0.1
         init_vec = np.array([[0],[0],[50]]).T
         r = R.from_rotvec(rot)
         init_vec = r.apply(init_vec).T
+
+        
+
+        # Face points relative to camera
+        #p = cam_pos-current_cam['R']*points
 
         # Start point of pose vector
         cc = (-current_cam['R'].transpose() * current_cam['t'])+current_cam['R'].transpose()*pose
         # End point of pose vector
         cc2 = cc+(-current_cam['R']*init_vec)
         cam_pos = -current_cam['R'].transpose() * current_cam['t']
-       
 
         r = R.from_rotvec((rot[0], rot[1], rot[2]))
         #init_vec_rot = r.apply(current_cam['R'].transpose()*init_vec)
@@ -43,19 +53,25 @@ def draw_prediction(camNo, frameNo, myFig, clr):
         pose = np.matrix(pose)
         #cc2 = r.apply(cc2) - pose
         #cc = cc+r.apply(pose)
-        if conf < 0.7:
+        if conf < 0.6:
             clr_ = (0.4,0.4,0.4)
         else:
             clr_ = clr
-        #mlab.points3d(cc[0,0],cc[1,0],cc[2,0],scale_factor=15,color=clr_)
-
         u = float(cc2[0,0])
         v = float(cc2[1,0])
         w = float(cc2[2,0])
         x = [u,float(cc[0,0])]
         y = [v,float(cc[1,0])]
         z = [w,float(cc[2,0])]
-        mlab.plot3d(x,y,z,tube_radius=1.5,color=clr_)
+        #x = float(cc[0,0])
+        #y = float(cc[1,0])
+        #z = float(cc[2,0])
+        mlab.plot3d(x,y,z,color=clr_, tube_radius=1.5)
+        #mlab.quiver3d(x,y,z,color=clr_, scale_factor=1, mode='arrow')
+        
+        #mlab.points3d(p[0,:], p[1,:], p[2,:], scale_factor=3,color=clr_)
+
+        
 
     # Extract pose, rotation and confidence
 
@@ -63,9 +79,10 @@ def draw_prediction(camNo, frameNo, myFig, clr):
 cwd = os.getcwd()
 
 sel_cams = [0, 8, 15, 23]
+sel_cams = [0]
 frames = ["00001147", "00001613", "00002319", "00003476", "00003961", "00004905", "00005777", "00006078", "00006328",
           "00006577"]
-frameNo = frames[5]
+frameNo = frames[4]
 
 face_edges = np.array([[0,1],[1,2],[2,3],[3,4],[4,5],[5,6],[6,7],[7,8],[8,9],[9,10],[11,12],[12,13],[14,15],[15,16], #outline (ignored)
                 [17,18],[18,19],[19,20],[20,21], #right eyebrow
@@ -82,6 +99,9 @@ with open("calibration_160906_pizza1.json", 'r') as cfile:
     calib = json.load(cfile)
 
 cameras = {(cam['panel'], cam['node']): cam for cam in calib['cameras']}
+
+scale = "Scaled_3"
+method = "Lanczos4"
 
 for k, cam in cameras.items():
     cam['K'] = np.matrix(cam['K'])
@@ -109,7 +129,7 @@ for cam in range(31):
         i+=1
         color = color/255
         color = (color[0][0][0],color[0][0][1],color[0][0][2])
-        draw_prediction(cam, frameNo, myFig, color)
+        draw_prediction(cam, frameNo, myFig, color, scale, method)
 
     else:
         camera_positions.append([pos_x, pos_y, pos_z])
