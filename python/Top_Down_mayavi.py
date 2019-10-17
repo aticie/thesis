@@ -134,10 +134,10 @@ def draw_prediction(camNo, frameNo, myFig, clr, scale, method):
         #z = float(cc[2,0])
         #mlab.plot3d(x,y,z,color=clr_, tube_radius=1.5)
         #mlab.quiver3d(x,y,z,color=clr_, scale_factor=1, mode='arrow')
-        #print("Face Points:", p)
-        '''
-        mlab.points3d(p[0, :], p[1, :], p[2, :], scale_factor=2, color=clr_)
-        all_faces.append(p)
+        
+        mlab.points3d(p[0,:], p[1,:], p[2,:], scale_factor=3,color=clr_)
+
+        
 
     return all_faces
     # Extract pose, rotation and confidence
@@ -190,21 +190,6 @@ for cam in range(31):
     pos_z = int(cc[2])
     if cam in sel_cams:
         sel_cam_pos.append([pos_x, pos_y, pos_z])
-        x_axis = -current_cam['R'].transpose() * [[250], [0], [0]]
-        y_axis = -current_cam['R'].transpose() * [[0], [250], [0]]
-        z_axis = -current_cam['R'].transpose() * [[0], [0], [250]]
-
-        start = np.array([[pos_x], [pos_y], [pos_z]])
-        end_x = start+np.array(x_axis)
-        end_y = start+np.array(y_axis)
-        end_z = start+np.array(z_axis)
-
-        #mlab.plot3d([start[0], end_x[0]], [start[1], end_x[1]], [
-        #            start[2], end_x[2]], tube_radius=5, tube_sides=20, color=(0, 0, 1))
-        #mlab.plot3d([start[0], end_y[0]], [start[1], end_y[1]], [
-        #            start[2], end_y[2]], tube_radius=5, tube_sides=20, color=(0, 1, 0))
-        #mlab.plot3d([start[0], end_z[0]], [start[1], end_z[1]], [
-        #            start[2], end_z[2]], tube_radius=5, tube_sides=20, color=(1, 0, 0))
 
         # Show predictions for selected cam
         color = cv2.cvtColor(
@@ -245,29 +230,9 @@ z_ = np.array(z_)
 
 
 #mlab.points3d(x, y, z,scale_factor=30, color=(0.8, 0.1, 0.1))
-#mlab.plot3d(x_axis, y_axis, z_axis, tube_radius=5, tube_sides=20)
-#mlab.plot3d(x_axis, y_axis, z_axis, tube_radius=5, tube_sides=20)
-
-OpenFace_File = f"../asdf/hd_00_08/processed/{frameNo}.csv"
-df = pd.read_csv(OpenFace_File)
-poses = df.values.tolist()
-for faceNo, face in enumerate(poses):
-    if faceNo != 2:
-        continue
-    kp_3d_X = np.array(face[432:500])
-    kp_3d_Y = np.array(face[500:568])
-    kp_3d_Z = np.array(face[568:636])
-
-    predicted_face = np.array([kp_3d_X, kp_3d_Y, kp_3d_Z])
-    predicted_face = -current_cam['R'] * predicted_face
-    #mlab.points3d(predicted_face[0], predicted_face[1], predicted_face[2], scale_factor=1, color=color)
-
-    #print(kp_3d_X)
-    #print(predicted_face)
-
-#cams = mlab.points3d(x_, y_, z_, scale_factor=30, color=(0.1, 0.8, 0.1))
-#for i, _ in enumerate(x_):
-    #mlab.text3d(_-30, y_[i]-30, z_[i], "Cam "+str(i), scale=10)
+cams = mlab.points3d(x_, y_, z_,scale_factor=30, color=(0.1, 0.8, 0.1))
+for i,_ in enumerate(x_):
+    mlab.text3d(_-30,y_[i]-30,z_[i], "Cam "+str(i),scale=10)
 
 try:
     gt_pose_file = os.path.join(
@@ -311,13 +276,7 @@ for face in fframe['people']:
     mlab.points3d(x, y, z, color=color)
     mlab.text3d(x_avg, y_avg-25, z_avg, "Person "+str(i), scale=10)
 
-print(xyz.shape, predicted_face.shape)
-mtx1, mtx2, disparity = procrustes(xyz, predicted_face)
-print(mtx1, mtx2, disparity)
-#mlab.points3d(mtx1[0], mtx1[1], mtx1[2], color=(0,0,1))
-#mlab.points3d(mtx2[0], mtx2[1], mtx2[2], color=(1,0,0))
-body_edges = np.array([[1, 2], [1, 4], [4, 5], [5, 6], [1, 3], [3, 7], [7, 8], [
-                      8, 9], [3, 13], [13, 14], [14, 15], [1, 10], [10, 11], [11, 12]])-1
+body_edges = np.array([[1,2],[1,4],[4,5],[5,6],[1,3],[3,7],[7,8],[8,9],[3,13],[13,14],[14,15],[1,10],[10,11],[11,12]])-1
 
 i = 0
 for body in bframe['bodies']:
@@ -334,8 +293,8 @@ for body in bframe['bodies']:
         x = skel[0, edge]
         y = skel[1, edge]
         z = skel[2, edge]
-        #mlab.plot3d(x, y, z, tube_radius=3, line_width=10, color=color)
-
+        mlab.plot3d(x,y,z, tube_radius=3, line_width=10, color=color)
+    
 
 #mlab.view(.0, - 5.0, 4)
 mlab.show()
