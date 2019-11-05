@@ -96,13 +96,16 @@ def draw_prediction(camNo, frameNo, myFig, clr, scale, method):
         mlab.points3d(pose_draw[0], pose_draw[1],
                       pose_draw[2], scale_factor=10, color=clr_)
         '''
-        points = np.concatenate(([points_x], [points_y], [points_z]), axis=0)
+        points = np.concatenate(([points_x], [-points_y], [points_z]), axis=0)
         points = np.matrix(points)
         points /= 10
         points = -current_cam['R'] * points + cam_pos
         points = r.apply(points.T).T
         p = points
+        #mlab.points3d(p[0,:], p[1,:], p[2,:], scale_factor=3,color=clr_)
+
         #print(p)
+        all_faces.append(p)
         '''
         pose = np.matrix(pose).T*0.1
         init_vec = np.array([[0], [0], [50]]).T
@@ -136,12 +139,11 @@ def draw_prediction(camNo, frameNo, myFig, clr, scale, method):
         #mlab.quiver3d(x,y,z,color=clr_, scale_factor=1, mode='arrow')
         
         mlab.points3d(p[0,:], p[1,:], p[2,:], scale_factor=3,color=clr_)
-
+        '''
         
 
     return all_faces
     # Extract pose, rotation and confidence
-
 
 cwd = os.getcwd()
 
@@ -179,7 +181,7 @@ for k, cam in cameras.items():
 camera_positions = []
 sel_cam_pos = []
 
-myFig = mlab.figure(fgcolor=(0, 0, 0), bgcolor=(0.8, 0.8, .8))
+myFig = mlab.figure(fgcolor=(0, 0, 0), bgcolor=(0.8, 0.8, .8), size=(1200, 800))
 
 i = 0
 for cam in range(31):
@@ -197,11 +199,9 @@ for cam in range(31):
         i += 1
         color = color/255
         color = (color[0][0][0], color[0][0][1], color[0][0][2])
-        draw_prediction(cam, frameNo, myFig, color, scale, method)
-
+        all_faces = draw_prediction(cam, frameNo, myFig, color, scale, method)
     else:
         camera_positions.append([pos_x, pos_y, pos_z])
-
 
 x = []
 y = []
@@ -230,7 +230,7 @@ z_ = np.array(z_)
 
 
 #mlab.points3d(x, y, z,scale_factor=30, color=(0.8, 0.1, 0.1))
-cams = mlab.points3d(x_, y_, z_,scale_factor=30, color=(0.1, 0.8, 0.1))
+#cams = mlab.points3d(x_, y_, z_,scale_factor=30, color=(0.1, 0.8, 0.1))
 for i,_ in enumerate(x_):
     mlab.text3d(_-30,y_[i]-30,z_[i], "Cam "+str(i),scale=10)
 
@@ -270,11 +270,19 @@ for face in fframe['people']:
     z = face3d[2, :68]
     if i == 3:
         xyz = np.array([x,y,z])
+        predicted = all_faces[2]
+
+        a,b,c = procrustes(xyz, predicted)
+        mlab.points3d(a[0], a[1], a[2], scale_factor=0.01, color=(1,0,0))
+        mlab.points3d(b[0], b[1], b[2], scale_factor=0.01, color=(0,1,0))
+
+        pass
+        
     x_avg = np.average(x)
     y_avg = np.average(y)
     z_avg = np.average(z)
-    mlab.points3d(x, y, z, color=color)
-    mlab.text3d(x_avg, y_avg-25, z_avg, "Person "+str(i), scale=10)
+    #mlab.points3d(x, y, z, color=color)
+    #mlab.text3d(x_avg, y_avg-25, z_avg, "Person "+str(i), scale=10)
 
 body_edges = np.array([[1,2],[1,4],[4,5],[5,6],[1,3],[3,7],[7,8],[8,9],[3,13],[13,14],[14,15],[1,10],[10,11],[11,12]])-1
 
@@ -293,7 +301,7 @@ for body in bframe['bodies']:
         x = skel[0, edge]
         y = skel[1, edge]
         z = skel[2, edge]
-        mlab.plot3d(x,y,z, tube_radius=3, line_width=10, color=color)
+        #mlab.plot3d(x,y,z, tube_radius=3, line_width=10, color=color)
     
 
 #mlab.view(.0, - 5.0, 4)
